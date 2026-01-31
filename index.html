@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Aurora 3D Avatar</title>
+  <style>
+    body { margin:0; overflow:hidden; background:#ffffff; }
+  </style>
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.158/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.158/examples/jsm/"
+      }
+    }
+  </script>
+</head>
+<body>
+<script type="module">
+import * as THREE from "three";
+import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+
+const scene = new THREE.Scene();
+// scene.background = new THREE.Color(0xffffff);
+
+const camera = new THREE.PerspectiveCamera(60, window.innerWidth/window.innerHeight, 0.1, 1000);
+camera.position.set(0, 1.5, 2.5);
+
+const renderer = new THREE.WebGLRenderer({antialias:true});
+renderer.setSize(window.innerWidth, window.innerHeight);
+document.body.appendChild(renderer.domElement);
+
+// OrbitControls setup
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.05;
+controls.enablePan = false;
+controls.minDistance = 1.2;
+controls.maxDistance = 4;
+
+// lights
+scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 1));
+const dir = new THREE.DirectionalLight(0xffffff, 1);
+dir.position.set(2,5,3);
+scene.add(dir);
+
+// load model
+let model;
+let rightHand;
+let mixer;
+const clock = new THREE.Clock();
+
+const loader = new GLTFLoader();
+loader.load(
+  "lady_in_black_dress.glb",
+  (gltf) => {
+    model = gltf.scene;
+    // SIZE + POSITION FIX
+    model.scale.set(0.6, 0.6, 0.6); // try 0.7 or 0.5 if needed
+    model.position.set(0, -1.7, 0);
+    scene.add(model);
+
+    // Find hand bone for wave animation
+    model.traverse((obj) => {
+      if(obj.isBone && obj.name.toLowerCase().includes("hand")){
+        rightHand = obj;
+        console.log("Hand bone found:", obj.name);
+      }
+    });
+
+    // Start hand wave animation every 12 seconds
+    setInterval(() => {
+      let t = 0;
+      const waveAnim = setInterval(() => {
+        if(rightHand){
+          t += 0.1;
+          rightHand.rotation.z = Math.sin(t) * 0.6;
+
+          if(t > Math.PI * 2){
+            rightHand.rotation.z = 0;
+            clearInterval(waveAnim);
+          }
+        }
+      }, 30);
+    }, 12000);
+
+    // ANIMATION SETUP: use AnimationMixer and start first clip immediately
+    if (gltf.animations && gltf.animations.length > 0) {
+      mixer = new THREE.AnimationMixer(model);
+      const action = mixer.clipAction(gltf.animations[0]);
+      action.reset();
+      action.play();
+      // Force first frame to avoid a visible T-pose
+      mixer.update(0.01);
+    }
+  },
+  undefined,
+  (err) => console.error("GLB load error:", err)
+);
+
+// render loop
+function animate(){
+  requestAnimationFrame(animate);
+
+  const delta = clock.getDelta();
+  if (mixer) mixer.update(delta);
+
+  // Auto-rotation
+  if(model){
+    model.rotation.y += 0.00;
+  }
+
+  // Update controls
+  controls.update();
+  renderer.render(scene, camera);
+}
+animate();
+
+</script>
+
+</body>
+</html>
